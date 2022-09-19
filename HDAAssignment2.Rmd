@@ -54,32 +54,115 @@ library(boot)
 knitr::write_bib(c(.packages()), "packages.bib")
 ```
 
-### 4. (8pts) Conducting and interpreting a PCA
 
-Principal component analysis is often used to create indicator variables.  In this question, you will look at the womens AFL data provided in the [fitzRoy package](https://jimmyday12.github.io/fitzRoy/) to create an indicator variable for offensive skills, using PCA.
+# Introduction and motivation
 
-Download the 2020 season player stats. Compute the average of the statistics for each player. (There are two players who have two different names - this can happen when a women gets married, but it can also happen as a data entry mistake. Make sure these duplicates are removed.)
+# Data description
 
 ```{r }
-# devtools::install_github("jimmyday12/fitzRoy")
-library(fitzRoy)
-#aflw <- fetch_player_stats(2020, comp = "AFLW")
+us_ineq0 <- read_csv(here::here("Inequality_data.csv")) %>% 
+  rename("state"="State")
 
+us_ineq_long0 <- us_ineq0 %>% 
+  pivot_longer(cols = c(2:12),
+               names_to = "year",
+               values_to = "gini")
 
-# aflw <- fetch_player_stats(2020, comp = "AFLW")
-# aflw <- aflw %>% janitor::clean_names()
-load(here::here("data/aflw.rda"))
-aflw <- aflw %>% janitor::clean_names()
-load(here::here("data/aflw_num.rda"))
-aflw_num <- aflw_num %>% janitor::clean_names() 
-aflw_num1 <- aflw_num %>% 
-  cbind(aflw %>% dplyr::select(player_player_id,
-                        name,
-                        team_id,
-                        team_name,
-                        player_captain))
+us_ineq <- read_csv(here::here("Inequality_data.csv")) %>% 
+  rename("state"="State") %>% 
+  mutate(`1968`=case_when(state=="Oregon"~round(0.468620508909225,7),
+                          TRUE~`1968`))
+
+us_ineq_long <- us_ineq %>% 
+  pivot_longer(cols = c(2:12),
+               names_to = "year",
+               values_to = "gini")
 
 ```
+
+#Exploratory Data Analysis
+
+```{r ginidis, fig.cap="Density of Gini"}
+#votes distribution, bimodal. mostly around 0.5
+p1 <- us_ineq_long %>% 
+  filter(state !="United States") %>%
+  ggplot(mapping = aes(x=gini)) +
+  geom_histogram(binwidth=0.05,
+                 fill = "#beaed4")+
+  theme_bw() +
+  labs(x = "Gini") +
+  coord_cartesian(xlim = c(0,1))
+
+#US ts
+p2 <- us_ineq_long %>% 
+  filter(state =="United States") %>%
+  ungroup() %>% 
+  ggplot(mapping = aes(x=year,y=gini)) +
+  geom_col(size=3,fill = "#beaed4")+
+  theme_bw() +
+  coord_cartesian(ylim = c(0,1))
+
+
+```
+```{r eval=FALSE}
+#bar distribution
+#rating distribution
+us_ineq_long %>% 
+  mutate(lsgt50 = case_when(
+    gini>0.5 ~ "> 0.5",
+    gini<0.5 ~ "< 0.5",
+    TRUE ~ "0.5")) %>% 
+  mutate(lsgt36 = case_when(
+    gini>0.5 & gini<=0.625 ~ "0.625",
+    gini<=0.5 & gini>=0.375 ~ "0.375",
+    TRUE ~ "other")) %>% 
+  ggplot(mapping = aes(x=lsgt50,y=gini, fill=lsgt36),position="stack") +
+  geom_col() +
+  theme_bw() +
+  scale_fill_brewer("Gini",
+                    palette = "Accent") +
+  labs(x = "High/Low",
+       y = "Gini")
+
+#fewer states with lower inequality. Percentage of other in higher gini is higher than in lower gini. This means that more states have higher inequality than. Q4>Q1
+
+```
+The Gini Index, or Gini coefficient, is a statistical measure of distribution that is often used to track economic inequality. It measures how wealth is distributed in a given population. The output is a value between 0 and 1. In Oregon and throughout the country, Gini Index is a major focus of the American Community Survey (ACS), conducted each year by the U.S. Census Bureau.
+
+Higher values mean greater inequality. A Gini value of 0 means a perfectly equal society, where everyone's income is the same. A value of 1, on the other hand, represents perfect inequality—a society in which only one person or group has all the wealth. This report explores how Oregon’s Gini Index is changing—and how the data compares to the United States as a whole.
+```{r}
+
+#Oregon 1968 1000.0000000 wrong value must be corrected to 0.468620508909225.
+# https://www.livestories.com/statistics/oregon/gini-index-income-inequality
+
+p3 <- us_ineq_long0 %>% 
+  filter(state !="United States") %>%
+  ggplot(mapping = aes(x=year,y=gini)) +
+  geom_line(colour = "#beaed4")+
+  theme_bw() +
+  coord_cartesian(ylim = c(0,1000))
+```
+
+```{r}
+p4 <- us_ineq_long %>% 
+  filter(state !="United States") %>%
+  ggplot(mapping = aes(x=year,y=gini,color="state")) +
+  geom_line(colour = "#beaed4")+
+  theme_bw() 
+```
+
+# Analysis and findings
+
+
+# Conducting and interpreting a PCA
+
+# MDS
+
+# Conclusion
+
+Principal component analysis is often used to create indicator variables.  
+
+
 
 ```{r echo=TRUE}
 # duplicate playernames.
