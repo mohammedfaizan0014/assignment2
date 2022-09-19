@@ -34,7 +34,7 @@ library(kableExtra)
 library(viridisLite)
 library(plotly)
 library(tourr)
-
+library(readxl)
 library(discrim)
 library(parsnip)
 library(MASS)
@@ -46,7 +46,7 @@ library(GGally)
 library(palmerpenguins)
 library(fitzRoy)
 library(boot)
-
+library(fpp3)
 
 ```
 
@@ -76,7 +76,11 @@ us_ineq <- read_csv(here::here("Inequality_data.csv")) %>%
 us_ineq_long <- us_ineq %>% 
   pivot_longer(cols = c(2:12),
                names_to = "year",
-               values_to = "gini")
+               values_to = "gini") %>% 
+  mutate(year=as.numeric(year)) 
+  # mutate(year=as.POSIXlt(year, origin = "1984-01-01")) %>% 
+  # mutate(year=year(year)) %>% 
+  # as_tsibble(key = state, index = year)
 
 ```
 
@@ -143,64 +147,73 @@ p3 <- us_ineq_long0 %>%
   coord_cartesian(ylim = c(0,1000))
 ```
 
-```{r}
+```{r ts}
+#states
 p4 <- us_ineq_long %>% 
   filter(state !="United States") %>%
-  ggplot(mapping = aes(x=year,y=gini,color="state")) +
-  geom_line(colour = "#beaed4")+
-  theme_bw() 
+  ggplot(mapping = aes(x=year,y=gini)) +
+  geom_line(aes(color=state))+
+  #scale_x_continuous()
+  theme_bw()
+
+#US
+p5 <- us_ineq_long %>% 
+  filter(state =="United States") %>%
+  ggplot(mapping = aes(x=year,y=gini)) +
+  geom_line(aes(color=state))+
+  #scale_x_continuous()
+  theme_bw()
+
+ggplotly(p4)
+  
+#Alsaka rises to highest. Falls to lowest.
+#delaware outlier
+#others steady rise
 ```
+```{r}
+#mean on map cartogram.
+```
+
 
 # Analysis and findings
 
 
 # Conducting and interpreting a PCA
 
-# MDS
-
-# Conclusion
-
 Principal component analysis is often used to create indicator variables.  
 
+```{r}
+frankgini <- read_excel(here::here("Frank_Gini_2018.xls")) %>% 
+  janitor::clean_names() %>% 
+  dplyr::select(year,state,gini) %>% 
+  filter(year %in% unique(us_ineq_long$year)) %>% 
+  filter(!state %in% c("Alaska","Hawaii"))
+
+us_ineq_long1 <- us_ineq_long %>% filter(!state %in% c("Alaska","Hawaii")) %>% 
+  left_join(frankgini, by=c("state"="state","year"="year")) %>% 
+  mutate(gini.x=
+           case_when(is.na(gini.x)~round(gini.y,7),
+                     TRUE~gini.x)) %>% 
+dplyr::select(state, year, "gini"=gini.x)
+#remove alaska and hawai from analysis missing data
 
 
-```{r echo=TRUE}
-# duplicate playernames.
-# aflw_num1 %>% 
-#   distinct(name,player_player_id) %>% 
-#   count(player_player_id) %>% 
-#   arrange(-n)
-
-#length(unique(aflw$player_player_id)) 370
-
-
-aflw_num1 %>% filter(player_player_id %in% c("CD_I1009838","CD_I1011127")) %>%
-  arrange(player_player_id) %>% view()
-
-aflw_num2 <-  aflw_num1 %>% 
-  mutate(name =case_when(
-    str_detect(name, "JesseTawhiao-Wardlaw") ~ "JesseWardlaw",
-    str_detect(name, "JessicaFoley") ~ "JessFoley",
-    TRUE ~ name))
-#only numerics
-aflw_num3 <- aflw_num2 %>% 
-  dplyr::select(-c(1:3)) %>% 
-  dplyr::select(-c(35:40))
-  
-aflw_num4 <- aflw_num3 %>% cbind(aflw_num2 %>% dplyr::select(name))
-#aflw_num4[1:34]
-#length(unique(aflw_num2$name)) 370
+#full data for pca
+us_ineq1 <- us_ineq_long1 %>% 
+  pivot_wider(names_from = year,
+              values_from = gini)
 ```
+
+
+
 
 a. (1pt) Compute the total variance assuming standardised variables.
 
 ```{r}
-# tss_ns <- apply(aflw_num3, 2, var) #not standardised
-# sum(tss_ns)
+usineq_pc <- prcomp(us_ineq1[2:12], scale = TRUE, center = TRUE)
 
-afl_pc <- prcomp(aflw_num4[1:34], scale = TRUE, center = TRUE)
-#afl_pc$sdev
-tss_s <- sum(afl_pc$sdev^2) #standardised
+tss_s <- sum(usineq_pc$sdev^2) #standardised
+
 ```
 
 
@@ -209,11 +222,11 @@ tss_s <- sum(afl_pc$sdev^2) #standardised
 b. (1pt) Compute a PCA. What proportion of variance do the first two PCs explain?
 
 ```{r}
-screeplot(afl_pc, type="l")
+screeplot(usineq_pc, type="l")
 
-pve <- afl_pc$sdev^2 / tss_s
+pve <- usineq_pc$sdev^2 / tss_s
 
-#pve[1]+pve[2] #38.66%
+#pve[1]+pve[2] #62.64%
 ```
 
 
@@ -226,28 +239,28 @@ c. (1pt) Examine the loadings for the PC1 and PC2. Make plots of the loadings (l
 
 #afl_pc$rotation[,1:2]
 
-afl_pc_loadings <- as_tibble(afl_pc$rotation[,1:2]) %>%
-  mutate(variable = rownames(afl_pc$rotation), 
-         indx = 1:nrow(afl_pc$rotation),
-         ymin=rep(0, nrow(afl_pc$rotation)))
-ggplot(afl_pc_loadings) + 
-  geom_hline(yintercept=c(-1/sqrt(nrow(afl_pc$rotation)),
-                          1/sqrt(nrow(afl_pc$rotation))), colour="red") + 
+usineq_pc_loadings <- as_tibble(usineq_pc$rotation[,1:2]) %>%
+  mutate(variable = rownames(usineq_pc$rotation), 
+         indx = 1:nrow(usineq_pc$rotation),
+         ymin=rep(0, nrow(usineq_pc$rotation)))
+ggplot(usineq_pc_loadings) + 
+  geom_hline(yintercept=c(-1/sqrt(nrow(usineq_pc$rotation)),
+                          1/sqrt(nrow(usineq_pc$rotation))), colour="red") + 
   geom_errorbar(aes(x=indx, ymin=ymin, ymax=PC1)) +
   geom_point(aes(x=indx, y=PC1))
 
 
-ggplot(afl_pc_loadings) + 
-  geom_hline(yintercept=c(-1/sqrt(nrow(afl_pc$rotation)),
-                          1/sqrt(nrow(afl_pc$rotation))), colour="red") + 
+ggplot(usineq_pc_loadings) + 
+  geom_hline(yintercept=c(-1/sqrt(nrow(usineq_pc$rotation)),
+                          1/sqrt(nrow(usineq_pc$rotation))), colour="red") + 
   geom_errorbar(aes(x=variable, ymin=ymin, ymax=PC2)) +
   geom_point(aes(x=variable, y=PC2)) +
   theme(axis.text.x = element_text(angle = 45))
 ```
 ```{r loadings}
 
-afl_pc_loadings %>% arrange(PC1) %>% view()
-ggplot(afl_pc_loadings,aes(PC1,PC2)) +
+usineq_pc_loadings %>% arrange(PC1) %>% view()
+ggplot(usineq_pc_loadings,aes(PC1,PC2)) +
   geom_point() +
   geom_text(aes(label=variable)) +
   labs(title="Loadings")
@@ -256,10 +269,10 @@ ggplot(afl_pc_loadings,aes(PC1,PC2)) +
 
 
 ```{r scores}
-afl_pc_scores <- as_tibble(afl_pc$x[,1:2]) %>% 
-  cbind(aflw_num2 %>% dplyr::select(name))
+usineq_pc_loadings <- as_tibble(usineq_pc$x[,1:2]) %>% 
+  cbind(us_ineq1 %>% dplyr::select(state))
 
-afl_pc_scores %>% ggplot(aes(x=PC1,y=PC2)) +
+usineq_pc_loadings %>% ggplot(aes(x=PC1,y=PC2)) +
   geom_point() +
   theme(legend.position = "none") +
   labs(title="Scores")
@@ -333,27 +346,29 @@ biplot(afl_pc, scale = 0) +geom_text(aes(label=variable))
 ```
 
 ```{r}
+loadings <- tibble(var=names(usineq_pc$rotation[,2]),
+                   loadingPC2=usineq_pc$rotation[,2])
+
 library(ggrepel)
-afl_pca_var <- tibble(n=1:length(afl_pc$sdev), evl=afl_pc$sdev^2)
-afl_pca_pcs <- as_tibble(afl_pc$x[,1:2]) %>%
-  mutate(name=aflw_num4$name) %>% 
-  mutate(club=aflw_num2$team_name)
-afl_pca_evc <- as_tibble(afl_pc$rotation[,1:2]) %>% 
-  mutate(origin=rep(0, ncol(aflw_num4)-1), variable=colnames(aflw_num4)[1:34],
-         varname=rownames(afl_pc$rotation)) %>%
-  mutate(PC1s = PC1*(afl_pca_var$evl[1]*2.5), 
-         PC2s = PC2*(afl_pca_var$evl[2]*2.5))
+usineq_pca_var <- tibble(n=1:length(usineq_pc$sdev), evl=usineq_pc$sdev^2)
+usineq_pca_pcs <- as_tibble(usineq_pc$x[,1:2]) %>%
+  mutate(state=us_ineq1$state)
+usineq_pca_evc <- as_tibble(usineq_pc$rotation[,1:2]) %>% 
+  mutate(origin=rep(0, ncol(us_ineq1)-1), variable=colnames(us_ineq1)[2:12],
+         varname=rownames(usineq_pc$rotation)) %>%
+  mutate(PC1s = PC1*(usineq_pca_var$evl[1]*2.5), 
+         PC2s = PC2*(usineq_pca_var$evl[2]*2.5)) #change 2.5 accordingly
 pca_p <- ggplot() + 
-  geom_segment(data=afl_pca_evc %>% filter(varname %in% names(loadings)) , aes(x=origin, xend=PC1s, y=origin, yend=PC2s), colour="orange") +
-  geom_text_repel(data=afl_pca_evc, aes(x=PC1s, y=PC2s, label=variable, nudge_y=sign(PC2)*0.1), colour="orange", nudge_x=0.1) +
-  geom_point(data=afl_pca_pcs, aes(x=PC1, y=PC2),alpha=0.1) +
-  geom_text_repel(data=filter(afl_pca_pcs, PC2>10), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
-  geom_text_repel(data=filter(afl_pca_pcs, PC2< -3.5), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
+  geom_segment(data=usineq_pca_evc %>% filter(varname %in% names(loadings)) , aes(x=origin, xend=PC1s, y=origin, yend=PC2s), colour="orange") +
+  geom_text_repel(data=usineq_pca_evc, aes(x=PC1s, y=PC2s, label=variable, nudge_y=sign(PC2)*0.1), colour="orange", nudge_x=0.1) +
+  geom_point(data=usineq_pca_pcs, aes(x=PC1, y=PC2),alpha=0.1) +
+  geom_text_repel(data=filter(usineq_pca_pcs, PC2>10), aes(x=PC1, y=PC2, label=state), nudge_y=0.1, nudge_x=-0.1) +
+  geom_text_repel(data=filter(usineq_pca_pcs, PC2< -3.5), aes(x=PC1, y=PC2, label=state), nudge_y=0.1, nudge_x=-0.1) +
   #geom_text(data=filter(afl_pca_pcs,name=="MadisonPrespakis"), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
   xlab("PC1") + ylab("PC2") +
   theme(aspect.ratio=1)
 
-filter(afl_pca_pcs, PC2< -3) %>% view()
+filter(usineq_pca_pcs, PC2< -3) %>% view()
 
 #high scores on PC2 are more offensive. More goals in the season
 # low scores have the best and fairest awards in the 2020 season
@@ -371,10 +386,16 @@ PhoebeMonahan, MillieBrown, StaceyLivingstone, AlexandraAnderson, and DanaHooker
 
 **A high value on PC2 represents the player is more offensive. high scores on PC2 are more offensive. Such players have received leading goalkicker [awards](https://en.wikipedia.org/wiki/2020_AFL_Women%27s_season#Awards) in the season. Players with low PC2 scores are defensive and have received the best and fairest awards in the 2020 season.**
 
+
+
+
+
+
+# MDS
+
+# Conclusion
+
 # References
-
-
-
 ## R packages
 
 ```{r, load_refs, echo=FALSE}
