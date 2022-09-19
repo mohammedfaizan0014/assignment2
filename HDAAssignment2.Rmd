@@ -1,0 +1,309 @@
+---
+title: "Untitled"
+author: "Mohammed Faizan"
+date: '2022-09-19'
+output: html_document
+---
+
+```{r setup,echo = FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE, 
+  collapse = TRUE,
+  echo = FALSE,
+  comment = "#",
+  fig.height = 4,
+  fig.width = 8,
+  out.width = "100%",
+  fig.align = "center",
+  fig.retina = 4,
+  cache = TRUE
+)
+```
+
+```{r}
+library(ggrepel)
+library(tidyverse)
+library(tidymodels)
+library(discrim)
+library(mgcv)
+library(broom)
+library(patchwork)
+library(kableExtra)
+library(viridisLite)
+library(plotly)
+library(tourr)
+
+library(discrim)
+library(parsnip)
+library(MASS)
+library(tidymodels)
+library(rsample)
+library(yardstick)
+library(spinifex)
+library(GGally)
+library(palmerpenguins)
+library(fitzRoy)
+library(boot)
+
+
+```
+
+```{r writing_packages_bibliographies3}
+knitr::write_bib(c(.packages()), "packages.bib")
+```
+
+### 4. (8pts) Conducting and interpreting a PCA
+
+Principal component analysis is often used to create indicator variables.  In this question, you will look at the womens AFL data provided in the [fitzRoy package](https://jimmyday12.github.io/fitzRoy/) to create an indicator variable for offensive skills, using PCA.
+
+Download the 2020 season player stats. Compute the average of the statistics for each player. (There are two players who have two different names - this can happen when a women gets married, but it can also happen as a data entry mistake. Make sure these duplicates are removed.)
+
+```{r }
+# devtools::install_github("jimmyday12/fitzRoy")
+library(fitzRoy)
+#aflw <- fetch_player_stats(2020, comp = "AFLW")
+
+
+# aflw <- fetch_player_stats(2020, comp = "AFLW")
+# aflw <- aflw %>% janitor::clean_names()
+load(here::here("data/aflw.rda"))
+aflw <- aflw %>% janitor::clean_names()
+load(here::here("data/aflw_num.rda"))
+aflw_num <- aflw_num %>% janitor::clean_names() 
+aflw_num1 <- aflw_num %>% 
+  cbind(aflw %>% dplyr::select(player_player_id,
+                        name,
+                        team_id,
+                        team_name,
+                        player_captain))
+
+```
+
+```{r echo=TRUE}
+# duplicate playernames.
+# aflw_num1 %>% 
+#   distinct(name,player_player_id) %>% 
+#   count(player_player_id) %>% 
+#   arrange(-n)
+
+#length(unique(aflw$player_player_id)) 370
+
+
+aflw_num1 %>% filter(player_player_id %in% c("CD_I1009838","CD_I1011127")) %>%
+  arrange(player_player_id) %>% view()
+
+aflw_num2 <-  aflw_num1 %>% 
+  mutate(name =case_when(
+    str_detect(name, "JesseTawhiao-Wardlaw") ~ "JesseWardlaw",
+    str_detect(name, "JessicaFoley") ~ "JessFoley",
+    TRUE ~ name))
+#only numerics
+aflw_num3 <- aflw_num2 %>% 
+  dplyr::select(-c(1:3)) %>% 
+  dplyr::select(-c(35:40))
+  
+aflw_num4 <- aflw_num3 %>% cbind(aflw_num2 %>% dplyr::select(name))
+#aflw_num4[1:34]
+#length(unique(aflw_num2$name)) 370
+```
+
+a. (1pt) Compute the total variance assuming standardised variables.
+
+```{r}
+# tss_ns <- apply(aflw_num3, 2, var) #not standardised
+# sum(tss_ns)
+
+afl_pc <- prcomp(aflw_num4[1:34], scale = TRUE, center = TRUE)
+#afl_pc$sdev
+tss_s <- sum(afl_pc$sdev^2) #standardised
+```
+
+
+**the total variance assuming standardised variables in the data is `r tss_s`.**
+
+b. (1pt) Compute a PCA. What proportion of variance do the first two PCs explain?
+
+```{r}
+screeplot(afl_pc, type="l")
+
+pve <- afl_pc$sdev^2 / tss_s
+
+#pve[1]+pve[2] #38.66%
+```
+
+
+**First two PCs explain about `r round((pve[1]+pve[2])*100,2)`% of variance.**
+
+c. (1pt) Examine the loadings for the PC1 and PC2. Make plots of the loadings (like done in lecture and during tutorial). 
+
+```{r}
+#summary(afl_pc) 
+
+#afl_pc$rotation[,1:2]
+
+afl_pc_loadings <- as_tibble(afl_pc$rotation[,1:2]) %>%
+  mutate(variable = rownames(afl_pc$rotation), 
+         indx = 1:nrow(afl_pc$rotation),
+         ymin=rep(0, nrow(afl_pc$rotation)))
+ggplot(afl_pc_loadings) + 
+  geom_hline(yintercept=c(-1/sqrt(nrow(afl_pc$rotation)),
+                          1/sqrt(nrow(afl_pc$rotation))), colour="red") + 
+  geom_errorbar(aes(x=indx, ymin=ymin, ymax=PC1)) +
+  geom_point(aes(x=indx, y=PC1))
+
+
+ggplot(afl_pc_loadings) + 
+  geom_hline(yintercept=c(-1/sqrt(nrow(afl_pc$rotation)),
+                          1/sqrt(nrow(afl_pc$rotation))), colour="red") + 
+  geom_errorbar(aes(x=variable, ymin=ymin, ymax=PC2)) +
+  geom_point(aes(x=variable, y=PC2)) +
+  theme(axis.text.x = element_text(angle = 45))
+```
+```{r loadings}
+
+afl_pc_loadings %>% arrange(PC1) %>% view()
+ggplot(afl_pc_loadings,aes(PC1,PC2)) +
+  geom_point() +
+  geom_text(aes(label=variable)) +
+  labs(title="Loadings")
+```
+
+
+
+```{r scores}
+afl_pc_scores <- as_tibble(afl_pc$x[,1:2]) %>% 
+  cbind(aflw_num2 %>% dplyr::select(name))
+
+afl_pc_scores %>% ggplot(aes(x=PC1,y=PC2)) +
+  geom_point() +
+  theme(legend.position = "none") +
+  labs(title="Scores")
+```
+
+**Almost all loadings for PC1 are negative or on one side of zero. The loadings for PC2 are present on both sides of zero indicating a contrast of inference for the high and low values on PC2.**
+
+d. (1pt) Explain why PC2 might be used as an indicator for offensive player skills (in 30 words or less). 
+
+**The significant loadings for PC2 are skills related to offensive(eg, goal, goal accuracy, behinds etc) and defensive(intercepts and rebounds). These contrasting skills are present on opposite sides of zero proving that PC2 can be used as a indicator for offensive player skills.**
+
+e. (1pt) Use bootstrap to assess which variables could be considered unimportant for PC2 (ie loadings not significantly different from 0).
+
+# Loadings for PC2
+
+```{r out.width="60%", fig.width=6, fig.height=4}
+library(boot)
+compute_PC2 <- function(data, index) {
+  pc2 <- prcomp(data[index,], center=TRUE, scale=TRUE)$rotation[,2]
+  # Coordinate signs
+  if (sign(pc2[1]) < 0) 
+    pc2 <- -pc2 
+  return(pc2)
+}
+# Make sure sign of first PC element is positive
+PC2_boot <- boot(data=aflw_num4[,1:34], compute_PC2, R=1000)
+colnames(PC2_boot$t) <- colnames(aflw_num4[,1:34])
+PC2_boot_ci <- as_tibble(PC2_boot$t) %>%
+  gather(var, coef) %>% 
+  mutate(var = factor(var, levels=colnames(aflw_num4[,1:34]))) %>%
+  group_by(var) %>%
+  summarise(q2.5 = quantile(coef, 0.025), 
+            q5 = median(coef),
+            q97.5 = quantile(coef, 0.975)) %>%
+  mutate(t0 = PC2_boot$t0) 
+ggplot(PC2_boot_ci, aes(x=var, y=t0)) + 
+  geom_hline(yintercept=0, size=3, colour="white") +
+  geom_hline(yintercept=c(1/sqrt(nrow(afl_pc$rotation)), -1/sqrt(nrow(afl_pc$rotation))), linetype=2, colour="red") +
+  geom_point() +
+  geom_errorbar(aes(ymin=q2.5, ymax=q97.5), width=0.1) +
+  xlab("") + ylab("coefficient") +
+  theme(axis.text.x = element_text(angle = 80))
+``` 
+
+**The variables which have zero in their error band in the above plot are unimportant for PC2.**
+
+f. (1pt) Write down the formula for your new indicator variable. Explain your reasoning (in 30 words or less). 
+
+```{r}
+
+loadings <- tibble(var=names(afl_pc$rotation[,2]),
+                   loadingPC2=afl_pc$rotation[,2])
+loadings %>% 
+  filter(loadingPC2>1/sqrt(nrow(afl_pc$rotation))) %>% 
+  rbind(loadings %>% 
+  filter(loadingPC2< -1/sqrt(nrow(afl_pc$rotation))) ) %>% 
+  kable(caption = "Loading Vector with Important Variables")
+   
+                        
+```
+
+$PC2=goals*0.38+behinds*0.27+marks_inside50*0.33+goal_accuracy*0.30+tackles_inside50*0.2+shots_at_goal*0.42+score_involvements*0.3+rebound50s*-0.2+intercepts*-0.24$.
+
+**Since the goal of PC2 is to indicate offfensive skills all other skills irrelavant to this task are not important and are hence emoved from the formula for PC2.**
+
+g. (2pt) Make a biplot of the first two PCs. Which few players have the highest values, and which few players have the lowest value on PC2? What does it mean for a player to have a high value on PC2 (in 50 words or less)? 
+
+
+```{r eval=FALSE}
+biplot(afl_pc, scale = 0) +geom_text(aes(label=variable))
+```
+
+```{r}
+library(ggrepel)
+afl_pca_var <- tibble(n=1:length(afl_pc$sdev), evl=afl_pc$sdev^2)
+afl_pca_pcs <- as_tibble(afl_pc$x[,1:2]) %>%
+  mutate(name=aflw_num4$name) %>% 
+  mutate(club=aflw_num2$team_name)
+afl_pca_evc <- as_tibble(afl_pc$rotation[,1:2]) %>% 
+  mutate(origin=rep(0, ncol(aflw_num4)-1), variable=colnames(aflw_num4)[1:34],
+         varname=rownames(afl_pc$rotation)) %>%
+  mutate(PC1s = PC1*(afl_pca_var$evl[1]*2.5), 
+         PC2s = PC2*(afl_pca_var$evl[2]*2.5))
+pca_p <- ggplot() + 
+  geom_segment(data=afl_pca_evc %>% filter(varname %in% names(loadings)) , aes(x=origin, xend=PC1s, y=origin, yend=PC2s), colour="orange") +
+  geom_text_repel(data=afl_pca_evc, aes(x=PC1s, y=PC2s, label=variable, nudge_y=sign(PC2)*0.1), colour="orange", nudge_x=0.1) +
+  geom_point(data=afl_pca_pcs, aes(x=PC1, y=PC2),alpha=0.1) +
+  geom_text_repel(data=filter(afl_pca_pcs, PC2>10), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
+  geom_text_repel(data=filter(afl_pca_pcs, PC2< -3.5), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
+  #geom_text(data=filter(afl_pca_pcs,name=="MadisonPrespakis"), aes(x=PC1, y=PC2, label=name), nudge_y=0.1, nudge_x=-0.1) +
+  xlab("PC1") + ylab("PC2") +
+  theme(aspect.ratio=1)
+
+filter(afl_pca_pcs, PC2< -3) %>% view()
+
+#high scores on PC2 are more offensive. More goals in the season
+# low scores have the best and fairest awards in the 2020 season
+pca_p
+```
+
+- Players with high PC2 values are:
+CoraStaunton, ChloeMolloy, SabreenaDuffy, and SarahD'Arcy
+` knitr::combine_words(filter(afl_pca_pcs, PC2>10)$name)`
+
+- Players with high PC2 values are:
+PhoebeMonahan, MillieBrown, StaceyLivingstone, AlexandraAnderson, and DanaHooker
+` knitr::combine_words(filter(afl_pca_pcs, PC2< -3.5)$name)`
+
+
+**A high value on PC2 represents the player is more offensive. high scores on PC2 are more offensive. Such players have received leading goalkicker [awards](https://en.wikipedia.org/wiki/2020_AFL_Women%27s_season#Awards) in the season. Players with low PC2 scores are defensive and have received the best and fairest awards in the 2020 season.**
+
+# References
+
+
+
+## R packages
+
+```{r, load_refs, echo=FALSE}
+library(RefManageR)
+bib <- ReadBib(here::here("packages.bib"), check = FALSE)
+ui <- "- "
+```
+
+```{r, print_refs, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
+writeLines(ui)
+print(bib, 
+  .opts = list(check.entries = FALSE, 
+               style = "html", 
+               bib.style = "authoryear"))
+```
