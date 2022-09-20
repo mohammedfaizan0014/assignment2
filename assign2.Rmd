@@ -1,0 +1,170 @@
+---
+title: "Group Assignment 2-ETC3500/5500 2022"
+subtitle: "by Nishtha Arora (32296622)"
+output: html_document
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = FALSE, cache.lazy = FALSE, warning = FALSE, message = FALSE )
+```
+
+```{r library}
+library(readr)
+library(tidyverse)
+library(kableExtra)
+library(skimr)
+library(DataExplorer)
+```
+
+```{r data}
+data_read <- read_csv(here::here("Inequality_data.csv"))
+```
+
+# Introduction and Motivation
+
+The motive of this report is to investigate that how inequality has evolved over the last few years. This is done via analyzing the Gini Index for 52 States of the United States of America.
+
+The Gini Index/Coefficient/Ratio is a measured quantity of economic inequality in population i.e. the difference in the rich and the poor. This is done by measuring the income or distribution of wealth of the population. Practically, this value is only between 0 to 1 (or 0% to 100%) where a perfect 0 represents that there is equal distribution of wealth and a perfect 1 indicates a complete inequality (Corporate Finance Institute, 2021).
+
+# Data Description
+
+## Source of data
+
+This data has been extracted from the [ U.S. State-Level Income Inequality Data-Mark W. Frank.](https://www.shsu.edu/eco_mwf/inequality.html).
+
+## Structure of data
+
+The data set used for the analysis includes the Gini Index values for the 52 States of the USA. The data records the index for 11 years starting from 1918 to 2018 with an interval of 10 years. The dataset has 52 rows and 12 columns.
+
+### Variable description and datatype
+
+```{r table}
+
+Description <- data.frame(Variables = names(data_read),
+                          Description = c("Name of the USA States",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record",
+                                          "Year of record"
+ ),
+                   Type = c("character",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric",
+                            "numeric"))
+
+knitr::kable(Description,
+             caption = "Description of Variables used") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+```
+
+## Checking data for outliers
+
+```{r outlier }
+data2 <- data_read %>% 
+  select(-c(State))%>%
+  pivot_longer(cols = "1918" : "2018",  
+               names_to = "year",            
+               values_to = "value")  %>% 
+  mutate(year=as.numeric(year))
+
+boxplot(value ~ year,
+data= data2,
+main="Outlier detected",
+xlab="year",
+ylab="Gini Index",
+col="red",
+border="black"
+)
+```
+
+It is observed that there is an outlier in the year 1968. This value is removed and is displayed below.
+
+```{r corrected}
+data <- data_read %>% 
+  filter(`1968` < 800)
+```
+
+```{r boxplot}
+data3 <- data %>% 
+  select(-c(State))%>%
+  pivot_longer(cols = "1918" : "2018",  
+               names_to = "year",            
+               values_to = "value")  %>% 
+  mutate(year=as.numeric(year))
+
+boxplot(value ~ year,
+data= data3,
+main="Gini Index summary",
+xlab="year",
+ylab="Gini Index",
+col="green",
+border="black"
+)
+```
+
+The plot displays the minimum, maximum values and the median values for Gini Index for each year measured. It is seen that the maximum gini index i.e. largest inequality value was observed in the year 1928 and lowest in 1918. The values have somewhat remained similar for the year 2008 and 2018.
+
+**Further analysis is done on the basis of corrected dataset**
+
+Graph below showcase the missing values for each variable in the data. 
+
+```{r missing}
+plot_missing(data)
+```
+
+It is observed that for the year 1948, there are maximum NA (missing) values and the years 1918, 1928, 1938 and 1958 have some missing values as well.
+
+The plot shows the distribution of Gini Indexes for each year.
+
+```{r}
+plot_histogram(data)
+```
+
+It is observed that for 1968, the plot is right skewed and similarly somewhat for 1988 as well.
+
+### Overall Data Quality
+
+The information below displays the data structure, i.e. no. of rows and columns, variable types, count of missing values, minimum and maximum values, mean and standard deviation for each variable and distribution for each variable as well.
+
+```{r}
+skimr::skim(data)
+```
+
+### Overall Data Summary
+
+```{r}
+data4 <- data %>% 
+  pivot_longer(cols = "1918" : "2018",  
+               names_to = "year",            
+               values_to = "value")  %>% 
+  mutate(year=as.numeric(year))
+
+ggplot(data4, aes(x=value, y=State, colour=year))+
+  geom_line()
+```
+
+It is observed that South Dakota has recorded the minimum Gini Index and Delaware, the maximum, overall. It is seen that for almost all the states, the Gini Index was lower in the earlier years whereas it has increased overtime. This means that the rich are getting more rich and poor, more poor, there is an increase in the inequality overall.
+
+
+
+# References
+
+ Corporate Finance Institute. (2021, February 2). Gini Coefficient. Retrieved September 21, 2022, from https://corporatefinanceinstitute.com/resources/knowledge/economics/gini-coefficient/
+ 
+ The U.S. Income Inequality Page of Mark W. Frank. (n.d.). Retrieved September 21, 2022, from https://www.shsu.edu/eco_mwf/inequality.html
