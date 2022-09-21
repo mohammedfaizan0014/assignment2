@@ -27,6 +27,7 @@ library(ggrepel)
 library(tidyverse)
 library(tidymodels)
 library(discrim)
+library(gghighlight)
 library(mgcv)
 library(broom)
 library(patchwork)
@@ -126,7 +127,9 @@ us_ineq_long %>%
   scale_fill_brewer("Gini",
                     palette = "Accent") +
   labs(x = "High/Low",
-       y = "Gini")
+       y = "Gini",
+       title = "Distribution Rate of Gini") +
+  theme(legend.position = "bottom")
 
 #fewer states with lower inequality. Percentage of other in higher gini is higher than in lower gini. This means that more states have higher inequality than. Q4>Q1
 
@@ -153,6 +156,10 @@ p4 <- us_ineq_long %>%
   filter(state !="United States") %>%
   ggplot(mapping = aes(x=year,y=gini)) +
   geom_line(aes(color=state))+
+  #gghighlight(max(gini)) +
+  labs(x = "Year",
+       y = "Gini",
+       title = "Trend of Gini over the years w.r.t States") +
   #scale_x_continuous()
   theme_bw()
 
@@ -165,11 +172,13 @@ p5 <- us_ineq_long %>%
   theme_bw()
 
 ggplotly(p4)
-  
-#Alsaka rises to highest. Falls to lowest.
+
+ #Alsaka rises to highest. Falls to lowest.
 #delaware outlier
 #others steady rise
 ```
+
+The above clearly indicates that there is a lot of missing data over the years for many states. We could observe Alaska saw a gradual increase in Gini Rate and reached its max Gini value of **0.695** in year **1988** and since then went on a decline.
 ```{r}
 #mean on map cartogram.
 ```
